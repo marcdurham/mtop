@@ -30,6 +30,59 @@ Re-running `install.sh` upgrades in place and keeps the existing token and confi
 Config lives in `/etc/mtop/mtop.env`. After editing it, run `sudo systemctl restart mtop`.
 To remove: `sudo ./uninstall.sh [--purge]`.
 
+### Cross-compiling for another architecture
+
+`package.sh` defaults to this machine's architecture (`<arch>-unknown-linux-musl`).
+To build on a fast machine for a different target, such as an aarch64 board from an
+x86_64 PC, pass the Rust target:
+
+```sh
+./package.sh aarch64-unknown-linux-musl     # -> dist/mtop-<ver>-aarch64.tar.gz
+```
+
+The script adds the rustup target for you, but cargo also needs a linker for it.
+Either install a cross gcc (`sudo apt install gcc-aarch64-linux-gnu`) and add to
+`.cargo/config.toml`:
+
+```toml
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-gnu-gcc"
+```
+
+or, with no extra packages, use the `rust-lld` that ships with the toolchain:
+
+```toml
+[target.aarch64-unknown-linux-musl]
+linker = "rust-lld"
+rustflags = ["-C", "link-self-contained=yes"]
+```
+
+Then copy and install as above:
+
+```sh
+scp dist/mtop-*-aarch64.tar.gz user@host:/tmp/
+ssh -t user@host 'cd /tmp && tar xzf mtop-*-aarch64.tar.gz && cd mtop-*/ && sudo ./install.sh'
+```
+
+## Running as a service
+
+`install.sh` installs mtop as a systemd service that starts at boot and restarts
+automatically if it crashes (`Restart=always`). It runs as an unprivileged `mtop`
+user. Paths: binary `/usr/local/bin/mtop`, config `/etc/mtop/mtop.env`, unit
+`/etc/systemd/system/mtop.service`.
+
+```sh
+systemctl status mtop           # is it running?
+journalctl -u mtop -f           # follow logs
+sudo systemctl restart mtop     # after editing /etc/mtop/mtop.env
+sudo systemctl stop mtop        # stop until next boot / start
+sudo systemctl start mtop
+sudo systemctl disable --now mtop   # stop and don't start at boot
+```
+
+If `ufw` is active, allow remote access with `sudo ufw allow 8787/tcp`.
+To upgrade, build a new tarball, copy it over and re-run `sudo ./install.sh`.
+
 ## API
 
 Every `/api/v1/*` endpoint needs `Authorization: Bearer <token>`.
