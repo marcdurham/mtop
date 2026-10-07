@@ -1,8 +1,13 @@
 use std::collections::{HashMap, VecDeque};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
+
+use crate::proxy::{self, ProxyMode, ProxyStats};
+
+/// Proxy configs change rarely; re-read them at most this often.
+const PROXY_REFRESH: Duration = Duration::from_secs(60);
 
 /// Pseudo / virtual filesystems that don't represent real storage.
 const IGNORED_FS: &[&str] = &[
@@ -20,6 +25,9 @@ pub struct Snapshot {
     pub cpu: CpuStats,
     pub memory: MemoryStats,
     pub disks: Vec<DiskStats>,
+    /// Domains served by Caddy or nginx on this host (absent when neither is found).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<ProxyStats>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -75,6 +83,8 @@ pub struct HistoryPoint {
     pub memory_percent: f64,
     pub swap_percent: f64,
     pub disks: Vec<DiskUsagePoint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy_domains: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -99,6 +109,7 @@ impl From<&Snapshot> for HistoryPoint {
                     usage_percent: d.usage_percent,
                 })
                 .collect(),
+            proxy_domains: s.proxy.as_ref().map(|p| p.domain_count),
         }
     }
 }
@@ -139,10 +150,12 @@ impl History {
 /// refreshes, so the collector must be long-lived and sampled periodically.
 pub struct Collector {
     sys: System,
+    proxy_mode: ProxyMode,
+    proxy: Option<(Instant, Option<ProxyStats>)>,
 }
 
 impl Collector {
-    pub fn new() -> Self {
+    pub fn new(proxy_mode: ProxyMode) -> Self {
         let mut sys = System::new_with_specifics(
             RefreshKind::nothing()
                 .with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
@@ -151,7 +164,7 @@ impl Collector {
         // Prime the CPU counters so the first real sample has a baseline.
         sys.refresh_cpu_usage();
         std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
-        Self { sys }
+        Self { sys, proxy_mode, proxy: None }
     }
 
     pub fn sample(&mut self) -> Snapshot {
@@ -200,6 +213,20 @@ impl Collector {
             cpu,
             memory,
             disks: collect_disks(),
+            proxy: self.proxy_stats(),
+        }
+    }
+}
+
+impl Collector {
+    fn proxy_stats(&mut self) -> Option<ProxyStats> {
+        match &self.proxy {
+            Some((at, stats)) if at.elapsed() < PROXY_REFRESH => stats.clone(),
+            _ => {
+                let stats = proxy::collect(self.proxy_mode);
+                self.proxy = Some((Instant::now(), stats.clone()));
+                stats
+            }
         }
     }
 }

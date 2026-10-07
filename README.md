@@ -94,6 +94,7 @@ Every `/api/v1/*` endpoint needs `Authorization: Bearer <token>`.
 | `GET /api/v1/cpu` | Overall %, per-core %, load average (1/5/15) |
 | `GET /api/v1/memory` | RAM total/used/available/% and swap |
 | `GET /api/v1/disks` | Every real mounted filesystem (tmpfs/squashfs/overlay etc. excluded) |
+| `GET /api/v1/proxy` | Domains served by Caddy or nginx on this host, and where each is forwarded to |
 | `GET /api/v1/history?seconds=N` | Compact samples from the last N seconds (default: all) |
 
 ```sh
@@ -118,5 +119,16 @@ are silently left out.
 | `MTOP_NO_AUTH` | unset | Set to `1` to run without auth (dev only) |
 | `MTOP_INTERVAL_SECS` | `5` | Sampling interval |
 | `MTOP_HISTORY_SECS` | `3600` | How much history to keep |
+| `MTOP_PROXY` | `auto` | Reverse proxy to report domains for: `auto`, `caddy`, `nginx` or `off` |
+
+### Reverse-proxy domains
+
+When Caddy or nginx runs on the host, `/api/v1/metrics` (and `/api/v1/proxy`) include a `proxy`
+object: the server, whether it is running, and every domain it serves with its targets — upstream
+`host:port`s, or `files` / `redirect` / `respond`. Caddy is read from its admin API
+(`localhost:2019/config/`), falling back to `/etc/caddy/Caddyfile`; nginx from
+`/etc/nginx/nginx.conf` with its `include`s followed (`server_name` plus `proxy_pass` and the other
+`*_pass` directives, with `upstream` blocks resolved). The config is re-read once a minute.
+`/api/v1/history` points carry `proxy_domains`, the count.
 
 Local dev: `MTOP_NO_AUTH=1 cargo run`

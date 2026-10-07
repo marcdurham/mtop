@@ -1,5 +1,6 @@
 mod api;
 mod metrics;
+mod proxy;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
@@ -7,12 +8,14 @@ use std::time::Duration;
 
 use api::AppState;
 use metrics::{Collector, History, HistoryPoint};
+use proxy::ProxyMode;
 
 struct Config {
     bind: SocketAddr,
     token: Option<String>,
     interval_secs: u64,
     history_secs: u64,
+    proxy: ProxyMode,
 }
 
 impl Config {
@@ -26,6 +29,7 @@ impl Config {
         let history_secs: u64 = env_or("MTOP_HISTORY_SECS", "3600")
             .parse()
             .map_err(|e| format!("invalid MTOP_HISTORY_SECS: {e}"))?;
+        let proxy = ProxyMode::parse(&env_or("MTOP_PROXY", "auto"))?;
         if interval_secs == 0 {
             return Err("MTOP_INTERVAL_SECS must be > 0".into());
         }
@@ -44,6 +48,7 @@ impl Config {
             token,
             interval_secs,
             history_secs,
+            proxy,
         })
     }
 }
@@ -67,7 +72,7 @@ async fn main() {
         }
     };
 
-    let mut collector = Collector::new();
+    let mut collector = Collector::new(config.proxy);
     let first = collector.sample();
     let capacity = (config.history_secs / config.interval_secs).max(1) as usize;
     let mut history = History::new(capacity);

@@ -137,6 +137,7 @@ fi
 
 cur_interval="${INTERVAL:-$(existing MTOP_INTERVAL_SECS)}"
 cur_history="${HISTORY:-$(existing MTOP_HISTORY_SECS)}"
+cur_proxy="$(existing MTOP_PROXY)"
 
 log "Writing $ENV_FILE"
 umask 027
@@ -146,6 +147,8 @@ MTOP_BIND=$cur_bind
 MTOP_TOKEN=$cur_token
 MTOP_INTERVAL_SECS=${cur_interval:-5}
 MTOP_HISTORY_SECS=${cur_history:-3600}
+# Reverse proxy whose domains are reported: auto, caddy, nginx or off
+MTOP_PROXY=${cur_proxy:-auto}
 EOF
 umask 022
 chown root:"$SERVICE_USER" "$ENV_FILE"

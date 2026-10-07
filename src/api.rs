@@ -25,6 +25,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/cpu", get(cpu))
         .route("/memory", get(memory))
         .route("/disks", get(disks))
+        .route("/proxy", get(proxy))
         .route("/history", get(history))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_token));
 
@@ -60,6 +61,11 @@ async fn memory(State(state): State<Arc<AppState>>) -> Response {
 async fn disks(State(state): State<Arc<AppState>>) -> Response {
     let s = latest(&state);
     Json(json!({ "timestamp": s.timestamp, "disks": s.disks })).into_response()
+}
+
+async fn proxy(State(state): State<Arc<AppState>>) -> Response {
+    let s = latest(&state);
+    Json(json!({ "timestamp": s.timestamp, "proxy": s.proxy })).into_response()
 }
 
 #[derive(Deserialize)]
