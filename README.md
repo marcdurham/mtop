@@ -104,6 +104,11 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8787/api/v1/metrics
 Disk `used_bytes` is `total - available`. It counts root-reserved blocks as used,
 so it can read a few percent higher than `df`.
 
+The service has `CAP_DAC_READ_SEARCH` so it can read the size of drives mounted
+where the `mtop` user can't go, like USB drives the desktop automounts under
+`/media/<user>` (that directory only lets its owner in). Without it those drives
+are silently left out.
+
 ## Environment variables
 
 | Variable | Default | |

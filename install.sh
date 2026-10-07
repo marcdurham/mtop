@@ -171,6 +171,8 @@ Restart=always
 RestartSec=3
 
 # Hardening. Filesystems stay visible (read-only) so disk usage can be read.
+# CAP_DAC_READ_SEARCH lets statvfs reach mounts under directories the mtop user can't enter,
+# such as desktop-automounted drives in /media/<user> (mode 0750 + ACL for that user only).
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
@@ -183,8 +185,8 @@ RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
-CapabilityBoundingSet=
-AmbientCapabilities=
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_DAC_READ_SEARCH
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 SystemCallArchitectures=native
 
@@ -195,7 +197,7 @@ EOF
 # Binding a port < 1024 as an unprivileged user needs this capability.
 port_num="${cur_bind##*:}"
 if (( port_num < 1024 )); then
-    sed -i 's/^CapabilityBoundingSet=$/CapabilityBoundingSet=CAP_NET_BIND_SERVICE/; s/^AmbientCapabilities=$/AmbientCapabilities=CAP_NET_BIND_SERVICE/' "$UNIT_FILE"
+    sed -i 's/^\(CapabilityBoundingSet\|AmbientCapabilities\)=.*$/& CAP_NET_BIND_SERVICE/' "$UNIT_FILE"
 fi
 
 systemctl daemon-reload
